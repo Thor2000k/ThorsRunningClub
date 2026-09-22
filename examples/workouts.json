@@ -1,0 +1,29 @@
+{
+  "workouts": [
+    {
+      "external_id": "club-2026-10-07-intervals",
+      "title": "Wednesday intervals",
+      "kind": "Intervals",
+      "starts_at": "2026-10-07T18:00:00+02:00",
+      "distance_km": 8,
+      "duration_minutes": 55,
+      "pace": "Your own pace",
+      "location": "Fælledparken, Copenhagen",
+      "notes": "2 km warm-up, 6 × 400 m with 200 m easy jogging, then cool down.",
+      "translations": {
+        "da": {
+          "title": "Onsdagsintervaller",
+          "pace": "Dit eget tempo",
+          "location": "Fælledparken, København",
+          "notes": "2 km opvarmning, 6 × 400 m med 200 m roligt løb imellem og til sidst afjogning."
+        },
+        "en": {
+          "title": "Wednesday intervals",
+          "pace": "Your own pace",
+          "location": "Fælledparken, Copenhagen",
+          "notes": "2 km warm-up, 6 × 400 m with 200 m easy jogging, then cool down."
+        }
+      }
+    }
+  ]
+}

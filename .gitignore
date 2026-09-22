@@ -1,0 +1,10 @@
+node_modules/
+node_modules
+.node_modules-backup-*/
+dist/
+data/
+.env
+__pycache__/
+*.pyc
+test-results/
+playwright-report/
