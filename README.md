@@ -38,6 +38,31 @@ The DA / EN switch changes navigation, forms, messages, glossary, workout types,
 
 Workout titles, notes, pace descriptions, and locations accept `translations.da` and `translations.en`. Missing translations fall back to the base text. Imported content is not automatically machine-translated. MCP descriptions encourage assistants to supply both languages. Stable `kind` values remain English in the database and are translated in the UI.
 
+## Sign-in and aliases
+
+Production sign-in uses Google OpenID Connect. The app stores Google’s stable account subject (`sub`) as the identity key, never a Google password. The Google display name is kept as account metadata; each member can choose a separate club alias that is shown in the app. The OAuth flow uses a server-side authorization code, a short-lived state cookie, a verified email identity, and an HttpOnly session cookie. Google sign-in is disabled until the required server variables are configured.
+
+Create Google OAuth credentials in Google Cloud Console as a Web application, then configure the authorized redirect URI to exactly match `GOOGLE_REDIRECT_URI` (for example `https://club.example.com/api/auth/google/callback`). Set:
+
+```bash
+export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+export GOOGLE_CLIENT_SECRET="your-client-secret"
+export GOOGLE_REDIRECT_URI="https://club.example.com/api/auth/google/callback"
+export SECURE_COOKIES=true
+```
+
+The redirect URI must use HTTPS in production. Do not commit the client secret. The callback exchanges the one-time code at Google and calls Google’s OpenID Connect userinfo endpoint; the app does not accept a client-supplied email or user ID as proof of identity.
+
+For local testing only, enable the explicitly gated password test account:
+
+```bash
+export ALLOW_TEST_LOGIN=true
+export SEED_DEMO=true
+npm run server
+```
+
+Test account: `test@example.com` / `RunClub-test-2026!`. This account is created only when `ALLOW_TEST_LOGIN=true`, is never created in the default production configuration, and should not be used after local testing. Password registration and login return “not found” when the flag is disabled.
+
 ## MCP tools
 
 - `list_workouts`: schedule and attendance counts, optionally filtered by inclusive `from_date` / `to_date` in Copenhagen time. No member identities.
@@ -120,8 +145,12 @@ Required: `external_id`, `title`, `kind`, `starts_at`, `distance_km`, `duration_
 | --- | --- |
 | `GET /api/workouts` | Schedule, attendance counts, and current user's joined state |
 | `GET /api/me` | Current user or null |
-| `POST /api/register` | `{name, email, password}`; creates account and session |
-| `POST /api/login` | `{email, password}` |
+| `GET /api/auth/config` | Reports whether Google sign-in and local test login are enabled |
+| `GET /api/auth/google/start` | Starts Google OpenID Connect sign-in |
+| `GET /api/auth/google/callback` | Handles the Google authorization callback |
+| `PATCH /api/me` | `{alias}`; updates the signed-in member’s club alias |
+| `POST /api/register` | Local test-only `{name, email, password}` when `ALLOW_TEST_LOGIN=true` |
+| `POST /api/login` | Local test-only `{email, password}` when `ALLOW_TEST_LOGIN=true` |
 | `POST /api/logout` | `{}`; destroys current session |
 | `POST /api/workouts/:id/attendance` | `{}`; joins an upcoming run idempotently |
 | `DELETE /api/workouts/:id/attendance` | `{}`; leaves a run |
@@ -157,5 +186,11 @@ Variables are read from the process environment; `.env` files are not automatica
 | `HOST` | `127.0.0.1` | Listen address |
 | `PORT` | `8000` | Backend port |
 | `SECURE_COOKIES` | `false` | Enable for HTTPS |
+| `GOOGLE_CLIENT_ID` | unset | Google OAuth Web client ID |
+| `GOOGLE_CLIENT_SECRET` | unset | Google OAuth Web client secret |
+| `GOOGLE_REDIRECT_URI` | derived from Host/port | Exact Google OAuth callback URI |
+| `ALLOW_TEST_LOGIN` | `false` | Enables the local-only password test account |
+| `TEST_LOGIN_EMAIL` | `test@example.com` | Override the local test email |
+| `TEST_LOGIN_PASSWORD` | `RunClub-test-2026!` | Override the local test password |
 
-This is a local MVP. Public deployment needs HTTPS and a reverse proxy, persistent disk and backups, and appropriate request limits. Preserve the public Host header through the proxy for same-origin checks. Cookies are HttpOnly/SameSite=Lax; passwords use salted scrypt; sessions expire after 30 days. Login throttling is per direct client IP. Password reset and email verification are not included. Do not expose the development server or trusted stdio process publicly.
+This is a local MVP. Public deployment needs HTTPS and a reverse proxy, persistent disk and backups, and appropriate request limits. Preserve the public Host header through the proxy for same-origin checks. Cookies are HttpOnly/SameSite=Lax; OAuth state cookies expire after ten minutes; sessions expire after 30 days. The local password test account is disabled by default. Do not expose the development server, trusted stdio process, or test credentials publicly.

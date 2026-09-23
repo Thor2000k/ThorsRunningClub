@@ -7,6 +7,8 @@ import re
 import secrets
 import sqlite3
 import time
+import urllib.parse
+import urllib.request
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from http.cookies import SimpleCookie
@@ -18,6 +20,12 @@ ROOT = Path(__file__).resolve().parent.parent
 DB_PATH = os.environ.get('DATABASE_PATH', str(ROOT / 'data' / 'club.sqlite3'))
 IMPORT_TOKEN = os.environ.get('WORKOUT_IMPORT_TOKEN', '')
 SECURE_COOKIE = os.environ.get('SECURE_COOKIES', 'false').lower() == 'true'
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
+GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', '')
+ALLOW_TEST_LOGIN = os.environ.get('ALLOW_TEST_LOGIN', 'false').lower() == 'true'
+TEST_EMAIL = os.environ.get('TEST_LOGIN_EMAIL', 'test@example.com')
+TEST_PASSWORD = os.environ.get('TEST_LOGIN_PASSWORD', 'RunClub-test-2026!')
 KINDS = {'Easy run', 'Intervals', 'Tempo', 'Long run', 'Recovery'}
 
 
@@ -39,7 +47,8 @@ def init_db(seed=True):
         db.executescript('''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY, name TEXT NOT NULL,
-                email TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL);
+                alias TEXT NOT NULL DEFAULT '', email TEXT UNIQUE NOT NULL,
+                password_hash TEXT, google_sub TEXT UNIQUE);
             CREATE TABLE IF NOT EXISTS sessions (
                 token_hash TEXT PRIMARY KEY, user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 expires_at INTEGER NOT NULL);
@@ -58,6 +67,14 @@ def init_db(seed=True):
         columns = {row['name'] for row in db.execute('PRAGMA table_info(workouts)')}
         if 'translations' not in columns:
             db.execute("ALTER TABLE workouts ADD COLUMN translations TEXT NOT NULL DEFAULT '{}'")
+        user_columns = {row['name'] for row in db.execute('PRAGMA table_info(users)')}
+        if 'alias' not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN alias TEXT NOT NULL DEFAULT ''")
+        if 'google_sub' not in user_columns:
+            db.execute("ALTER TABLE users ADD COLUMN google_sub TEXT UNIQUE")
+        if ALLOW_TEST_LOGIN and not db.execute('SELECT 1 FROM users WHERE email=?', (TEST_EMAIL.lower(),)).fetchone():
+            db.execute('INSERT INTO users (name,alias,email,password_hash) VALUES (?,?,?,?)',
+                       ('Local test account', 'Test Runner', TEST_EMAIL.lower(), password_hash(TEST_PASSWORD)))
         if seed and not db.execute('SELECT 1 FROM workouts LIMIT 1').fetchone():
             from zoneinfo import ZoneInfo
             now = datetime.now(ZoneInfo('Europe/Copenhagen'))
@@ -80,6 +97,32 @@ def password_hash(password, salt=None):
     salt = salt or secrets.token_hex(16)
     digest = hashlib.scrypt(password.encode(), salt=bytes.fromhex(salt), n=16384, r=8, p=1).hex()
     return f'{salt}:{digest}'
+
+
+def google_enabled():
+    return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+
+def redirect_uri(handler):
+    return GOOGLE_REDIRECT_URI or f"http{'s' if SECURE_COOKIE else ''}://{handler.headers.get('Host', '127.0.0.1:8000')}/api/auth/google/callback"
+
+
+def safe_return_to(value):
+    return value if isinstance(value, str) and value.startswith('/') and not value.startswith('//') else '/'
+
+
+def google_request(url, values):
+    body = urllib.parse.urlencode(values).encode()
+    request = urllib.request.Request(url, data=body, headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json'})
+    with urllib.request.urlopen(request, timeout=10) as response:
+        return json.loads(response.read())
+
+
+def create_session(db, user_id):
+    token = secrets.token_urlsafe(32)
+    db.execute('DELETE FROM sessions WHERE user_id=?', (user_id,))
+    db.execute('INSERT INTO sessions VALUES (?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user_id, int(time.time()) + 2592000))
+    return token
 
 
 def validate_workout(value):
@@ -184,7 +227,7 @@ class Handler(SimpleHTTPRequestHandler):
             return ''
 
     def user(self, db):
-        return db.execute('SELECT u.id,u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',
+        return db.execute('SELECT u.id,u.name,u.alias,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?',
                           (self.session_token(), int(time.time()))).fetchone()
 
     def session_cookie(self, token, age=2592000):
@@ -192,6 +235,19 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         path = urlsplit(self.path).path
+        if path == '/api/auth/config':
+            return self.reply(200, {'google_enabled': google_enabled(), 'test_login_enabled': ALLOW_TEST_LOGIN})
+        if path == '/api/auth/google/start':
+            if not google_enabled():
+                return self.redirect('/?auth_error=google_not_configured')
+            state = secrets.token_urlsafe(32)
+            query = urllib.parse.urlencode({'client_id': GOOGLE_CLIENT_ID, 'redirect_uri': redirect_uri(self),
+                                            'response_type': 'code', 'scope': 'openid email profile',
+                                            'state': state, 'access_type': 'online', 'prompt': 'select_account',
+                                            'return_to': safe_return_to(urllib.parse.parse_qs(urlsplit(self.path).query).get('return_to', ['/'])[0])})
+            return self.redirect(f'https://accounts.google.com/o/oauth2/v2/auth?{query}', self.oauth_cookie(state))
+        if path == '/api/auth/google/callback':
+            return self.google_callback()
         if path == '/mcp':
             origin = self.headers.get('Origin')
             if origin and urlsplit(origin).netloc != self.headers.get('Host'):
@@ -214,10 +270,73 @@ class Handler(SimpleHTTPRequestHandler):
             self.path = '/index.html'
         return super().do_GET()
 
+    def redirect(self, location, cookie=None):
+        self.send_response(302)
+        self.send_header('Location', location)
+        if cookie:
+            self.send_header('Set-Cookie', cookie)
+        self.send_header('Content-Length', '0')
+        self.end_headers()
+
+    def oauth_cookie(self, state, age=600):
+        return f'club_oauth_state={state}; Path=/; HttpOnly; SameSite=Lax; Max-Age={age}' + ('; Secure' if SECURE_COOKIE else '')
+
+    def oauth_state(self):
+        cookies = SimpleCookie()
+        try:
+            cookies.load(self.headers.get('Cookie', ''))
+            return cookies.get('club_oauth_state').value if cookies.get('club_oauth_state') else ''
+        except Exception:
+            return ''
+
+    def google_callback(self):
+        if not google_enabled():
+            return self.redirect('/?auth_error=google_not_configured')
+        query = urllib.parse.parse_qs(urlsplit(self.path).query)
+        state = query.get('state', [''])[0]
+        if not state or not hmac.compare_digest(state, self.oauth_state()):
+            return self.redirect('/?auth_error=google_state_invalid', self.oauth_cookie('', 0))
+        if query.get('error'):
+            return self.redirect('/?auth_error=google_cancelled', self.oauth_cookie('', 0))
+        code = query.get('code', [''])[0]
+        try:
+            tokens = google_request('https://oauth2.googleapis.com/token', {
+                'code': code, 'client_id': GOOGLE_CLIENT_ID, 'client_secret': GOOGLE_CLIENT_SECRET,
+                'redirect_uri': redirect_uri(self), 'grant_type': 'authorization_code',
+            })
+            access_token = tokens.get('access_token')
+            if not access_token:
+                raise ValueError('Google did not return an access token.')
+            request = urllib.request.Request('https://openidconnect.googleapis.com/v1/userinfo', headers={'Authorization': f'Bearer {access_token}', 'Accept': 'application/json'})
+            with urllib.request.urlopen(request, timeout=10) as response:
+                profile = json.loads(response.read())
+            subject, email = profile.get('sub'), profile.get('email', '').strip().lower()
+            if not subject or not email or profile.get('email_verified') is not True:
+                raise ValueError('Google did not return a verified email identity.')
+            with connect() as db:
+                row = db.execute('SELECT * FROM users WHERE google_sub=? OR email=?', (subject, email)).fetchone()
+                if row:
+                    if row['google_sub'] and row['google_sub'] != subject:
+                        raise ValueError('This email is linked to a different Google account.')
+                    db.execute('UPDATE users SET google_sub=?, name=? WHERE id=?', (subject, profile.get('name') or row['name'], row['id']))
+                    user_id = row['id']
+                else:
+                    alias = (profile.get('name') or email.split('@')[0]).strip()[:80]
+                    user_id = db.execute('INSERT INTO users (name,alias,email,password_hash,google_sub) VALUES (?,?,?,?,?)',
+                                         (profile.get('name') or alias, alias, email, '', subject)).lastrowid
+                token = create_session(db, user_id)
+                db.commit()
+            return self.redirect('/?auth=success', self.session_cookie(token))
+        except Exception:
+            return self.redirect('/?auth_error=google_failed', self.oauth_cookie('', 0))
+
     def do_POST(self):
         self.mutate()
 
     def do_DELETE(self):
+        self.mutate()
+
+    def do_PATCH(self):
         self.mutate()
 
     def mutate(self):
@@ -258,6 +377,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.reply(401, {'error': 'A valid import token is required.'})
                 return self.reply(200, import_workouts(db, self.body().get('workouts')))
             if path in ('/api/register', '/api/login') and self.command == 'POST':
+                if not ALLOW_TEST_LOGIN:
+                    return self.reply(404, {'error': 'Password login is disabled. Use Google sign-in.'})
                 data = self.body()
                 email, password = data.get('email', ''), data.get('password', '')
                 if not isinstance(email, str) or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email.strip()) or len(email) > 254:
@@ -282,13 +403,13 @@ class Handler(SimpleHTTPRequestHandler):
                         cursor = db.execute('INSERT INTO users (name,email,password_hash) VALUES (?,?,?)', (name.strip(), email, password_hash(password)))
                     except sqlite3.IntegrityError:
                         return self.reply(409, {'error': 'An account with this email already exists. Try signing in.'})
-                    user = db.execute('SELECT id,name,email FROM users WHERE id=?', (cursor.lastrowid,)).fetchone()
+                    user = db.execute('SELECT id,name,alias,email FROM users WHERE id=?', (cursor.lastrowid,)).fetchone()
                 else:
                     row = db.execute('SELECT * FROM users WHERE email=?', (email,)).fetchone()
-                    stored = row['password_hash'] if row else password_hash('dummy-password', '0' * 32)
+                    stored = row['password_hash'] if row and row['password_hash'] else password_hash('dummy-password', '0' * 32)
                     if not hmac.compare_digest(password_hash(password, stored.split(':')[0]), stored) or row is None:
                         return self.reply(401, {'error': 'Email or password is incorrect.'})
-                    user = {key: row[key] for key in ('id', 'name', 'email')}
+                    user = {key: row[key] for key in ('id', 'name', 'alias', 'email')}
                 token = secrets.token_urlsafe(32)
                 db.execute('DELETE FROM sessions WHERE token_hash=?', (self.session_token(),))
                 db.execute('INSERT INTO sessions VALUES (?,?,?)', (hashlib.sha256(token.encode()).hexdigest(), user['id'], now + 2592000))
@@ -299,6 +420,18 @@ class Handler(SimpleHTTPRequestHandler):
                 db.execute('DELETE FROM sessions WHERE token_hash=?', (self.session_token(),))
                 db.commit()
                 return self.reply(200, {'ok': True}, self.session_cookie('', 0))
+            if path == '/api/me' and self.command == 'PATCH':
+                user = self.user(db)
+                if not user:
+                    return self.reply(401, {'error': 'Sign in to edit your alias.'})
+                data = self.body()
+                alias = data.get('alias')
+                if not isinstance(alias, str) or not 1 <= len(alias.strip()) <= 80:
+                    raise ValueError('Alias must contain 1 to 80 characters.')
+                db.execute('UPDATE users SET alias=? WHERE id=?', (alias.strip(), user['id']))
+                db.commit()
+                updated = db.execute('SELECT id,name,alias,email FROM users WHERE id=?', (user['id'],)).fetchone()
+                return self.reply(200, {'user': dict(updated)})
             match = re.fullmatch(r'/api/workouts/(\d+)/attendance', path)
             if match:
                 self.body()

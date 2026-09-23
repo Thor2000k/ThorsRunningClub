@@ -43,6 +43,7 @@ h1, h2 { font-size: 29px; font-weight: 600; line-height: 1.25; letter-spacing: -
 .language-switch button { background: none; color: var(--muted); font-size: 10px; font-weight: 600; padding: 5px 6px; border-radius: 3px; }
 .language-switch button[aria-pressed="true"] { background: #303a33; color: #daece0; }
 .user-name { max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.alias-button { background: transparent; padding: 8px 0; cursor: pointer; }
 .mobile-menu { display: none !important; }
 .eyebrow { font-size: 10px; line-height: 1.6; font-weight: 600; letter-spacing: 1.8px; text-transform: uppercase; color: var(--accent); }
 .workouts-section { padding: 43px 0 42px; }
@@ -139,6 +140,12 @@ footer > p, footer > span { font-size: 10px; color: #9ca69f; }
 .full { width: 100%; margin-top: 5px; }
 .auth-switch { font-size: 11px; line-height: 1.8; text-align: center; color: var(--muted); margin-top: 23px; }
 .auth-switch button { background: transparent; color: var(--accent); text-decoration: underline; font-size: 11px; }
+.google-button { display: flex; align-items: center; justify-content: center; gap: 12px; width: 100%; min-height: 44px; border: 1px solid #53635a; border-radius: 6px; background: #f4f6f4; color: #1e2822; font-size: 12px; font-weight: 600; }
+.google-button:hover { background: #fff; }
+.google-button > svg { margin-left: auto; margin-right: 14px; color: #50635a; }
+.google-mark { display: grid; place-items: center; width: 21px; height: 21px; border-radius: 50%; color: #4285f4; font-size: 15px; font-weight: 800; font-family: Arial, sans-serif; }
+.auth-divider { display: flex; align-items: center; gap: 10px; margin: 21px 0 0; color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: 1px; }
+.auth-divider::before, .auth-divider::after { content: ""; height: 1px; background: var(--line); flex: 1; }
 .form-error { font-size: 12px; line-height: 1.7; color: #f0b9a6; }
 .detail-metrics { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding-block: 22px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
 .detail-metrics > span { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #c1ccc5; }

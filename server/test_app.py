@@ -19,9 +19,10 @@ class QuietHandler(app.Handler):
 class ClubTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
-        self.old_path, self.old_token = app.DB_PATH, app.IMPORT_TOKEN
+        self.old_path, self.old_token, self.old_test_login = app.DB_PATH, app.IMPORT_TOKEN, app.ALLOW_TEST_LOGIN
         app.DB_PATH = str(Path(self.temp.name) / 'test.sqlite3')
         app.IMPORT_TOKEN = 'test-secret'
+        app.ALLOW_TEST_LOGIN = True
         app.init_db(seed=False)
         self.server = ThreadingHTTPServer(('127.0.0.1', 0), QuietHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
@@ -39,7 +40,7 @@ class ClubTests(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join()
-        app.DB_PATH, app.IMPORT_TOKEN = self.old_path, self.old_token
+        app.DB_PATH, app.IMPORT_TOKEN, app.ALLOW_TEST_LOGIN = self.old_path, self.old_token, self.old_test_login
         self.temp.cleanup()
 
     def request(self, path, method='GET', data=None, headers=None):
@@ -133,6 +134,15 @@ class ClubTests(unittest.TestCase):
         self.import_run({**self.workout, 'starts_at': '2026-10-01T00:30:00+02:00'})
         response = handle_message({'jsonrpc': '2.0', 'id': 1, 'method': 'tools/call', 'params': {'name': 'list_workouts', 'arguments': {'from_date': '2026-10-01', 'to_date': '2026-10-01'}}})
         self.assertEqual(len(json.loads(response['result']['content'][0]['text'])['workouts']), 1)
+
+    def test_local_test_account_is_explicit_and_alias_is_editable(self):
+        config = self.request('/api/auth/config')[1]
+        self.assertTrue(config['test_login_enabled'])
+        self.assertFalse(config['google_enabled'])
+        self.assertEqual(self.request('/api/login', 'POST', {'email': 'test@example.com', 'password': 'RunClub-test-2026!'})[0], 200)
+        self.assertEqual(self.request('/api/me')[1]['user']['alias'], 'Test Runner')
+        self.assertEqual(self.request('/api/me', 'PATCH', {'alias': 'Night Owl'})[1]['user']['alias'], 'Night Owl')
+        self.assertEqual(self.request('/api/me', 'PATCH', {'alias': ''})[0], 400)
 
 
 if __name__ == '__main__':

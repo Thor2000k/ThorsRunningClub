@@ -105,7 +105,7 @@ function Modal({ children, onClose, label }) {
   );
 }
 
-function AuthModal({ mode, setMode, onClose, onSuccess, joining }) {
+function AuthModal({ mode, setMode, onClose, onSuccess, joining, googleEnabled, testLoginEnabled }) {
   const { t } = useTranslation();
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -148,7 +148,15 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining }) {
               "A simple account. A little accountability. A lot of good company.",
             )}
       </p>
-      <form onSubmit={submit}>
+      {googleEnabled && (
+        <a className="google-button" href={`/api/auth/google/start?return_to=${encodeURIComponent(window.location.pathname)}`}>
+          <span className="google-mark">G</span>
+          {t("Continue with Google")}
+          <ArrowRight size={17} />
+        </a>
+      )}
+      {googleEnabled && testLoginEnabled && <div className="auth-divider"><span>{t("or local test login")}</span></div>}
+      {testLoginEnabled && <form onSubmit={submit}>
         {mode === "register" && (
           <label>
             {t("Your name")}
@@ -201,8 +209,9 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining }) {
               : t("Sign in")}
           <ArrowRight size={17} />
         </button>
-      </form>
-      <p className="auth-switch">
+      </form>}
+      {!googleEnabled && !testLoginEnabled && <p className="form-error">{t("Google sign-in is not configured yet.")}</p>}
+      {testLoginEnabled && <p className="auth-switch">
         {mode === "register"
           ? t("Already part of the club?")
           : t("New around here?")}{" "}
@@ -215,9 +224,34 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining }) {
         >
           {mode === "register" ? t("Sign in") : t("Create an account")}
         </button>
-      </p>
+      </p>}
     </Modal>
   );
+}
+
+function AliasModal({ user, onClose, onSaved }) {
+  const { t } = useTranslation();
+  const [alias, setAlias] = useState(user.alias || user.name || "");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(event) {
+    event.preventDefault(); setBusy(true); setError("");
+    try {
+      const result = await api("/me", "PATCH", { alias });
+      onSaved(result.user); onClose();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+  return <Modal onClose={onClose} label={t("Edit your club alias")}>
+    <p className="eyebrow">{t("YOUR CLUB PROFILE")}</p>
+    <h2>{t("Choose your running alias")}</h2>
+    <p className="muted">{t("This is the name other club members will see. Your Google name stays private to your account.")}</p>
+    <form onSubmit={submit}>
+      <label>{t("Club alias")}<input value={alias} onChange={event => setAlias(event.target.value)} minLength={1} maxLength={80} required autoFocus /></label>
+      {error && <p className="form-error">{t(error)}</p>}
+      <button className="button primary full" disabled={busy}>{busy ? t("Saving…") : t("Save alias")}<Check size={17} /></button>
+    </form>
+  </Modal>;
 }
 
 function WorkoutCard({ workout, onDetails, onJoin, busy }) {
@@ -368,14 +402,17 @@ function ClubApp({ setLanguage }) {
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
+  const [authConfig, setAuthConfig] = useState({ google_enabled: false, test_login_enabled: false });
+  const [aliasModal, setAliasModal] = useState(false);
 
   async function load() {
     setLoading(true);
     setError("");
     try {
-      const [account, runs] = await Promise.all([api("/me"), api("/workouts")]);
+      const [account, runs, config] = await Promise.all([api("/me"), api("/workouts"), api("/auth/config")]);
       setUser(account.user);
       setWorkouts(runs.workouts);
+      setAuthConfig(config);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -526,9 +563,9 @@ function ClubApp({ setLanguage }) {
           </div>
           {user ? (
             <>
-              <span className="user-name">
-                {t("Hey, {name}", { name: user.name.split(" ")[0] })}
-              </span>
+              <button className="user-name alias-button" onClick={() => setAliasModal(true)}>
+                {t("Hey, {name}", { name: user.alias || user.name.split(" ")[0] })}
+              </button>
               <button className="text-button" onClick={logout}>
                 {t("Sign out")}
               </button>
@@ -742,8 +779,11 @@ function ClubApp({ setLanguage }) {
           }}
           onSuccess={authenticated}
           joining={!!pendingJoin}
+          googleEnabled={authConfig.google_enabled}
+          testLoginEnabled={authConfig.test_login_enabled}
         />
       )}
+      {aliasModal && user && <AliasModal user={user} onClose={() => setAliasModal(false)} onSaved={updated => { setUser(updated); setToast(t("Alias saved.")); }} />}
       {selectedWorkout && (
         <Modal onClose={() => setDetails(null)} label={selectedWorkout.title}>
           <span

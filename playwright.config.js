@@ -20,6 +20,7 @@ export default defineConfig({
       DATABASE_PATH: `/tmp/thors-e2e-${process.pid}.sqlite3`,
       SEED_DEMO: "false",
       WORKOUT_IMPORT_TOKEN: "local-e2e-import-token",
+      ALLOW_TEST_LOGIN: "true",
     },
     reuseExistingServer: false,
   },
