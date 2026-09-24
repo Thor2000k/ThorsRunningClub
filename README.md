@@ -20,7 +20,7 @@ VITE_SUPABASE_ANON_KEY=your-public-anon-key
 
 The Vercel frontend no longer depends on the Python server for workouts, profiles, attendance, or Google login. Vercel’s frontend deployment and environment model is documented [here](https://vercel.com/docs/frameworks/frontend/vite). Supabase’s anon key is intended for browser use only with appropriate row-level security policies; the service-role key must remain server-side.
 
-The current Python server still supports local SQLite development, the local test account, REST imports, and MCP tools. MCP publishing does not yet write to Supabase; for a production MCP workflow, the MCP server should be moved to a server-side function using a Supabase service-role key kept outside the browser.
+The current Python server still supports local SQLite development, the local test account, REST imports, and MCP tools. Set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` in the private MCP process to make `upsert_workouts` and `list_workouts` target the Supabase database instead of SQLite. Keep the service-role key only in that trusted server/tunnel process; never use it in `VITE_*` variables or browser code.
 
 ## Run locally
 
@@ -214,5 +214,7 @@ Variables are read from the process environment; `.env` files are not automatica
 | `ALLOW_TEST_LOGIN` | `false` | Enables the local-only password test account |
 | `TEST_LOGIN_EMAIL` | `test@example.com` | Override the local test email |
 | `TEST_LOGIN_PASSWORD` | `RunClub-test-2026!` | Override the local test password |
+| `SUPABASE_URL` | unset | Supabase URL for the trusted MCP publisher |
+| `SUPABASE_SERVICE_ROLE_KEY` | unset | Server-only Supabase key for MCP publishing |
 
 This is a local MVP. Public deployment needs HTTPS and a reverse proxy, persistent disk and backups, and appropriate request limits. Preserve the public Host header through the proxy for same-origin checks. Cookies are HttpOnly/SameSite=Lax; OAuth state cookies expire after ten minutes; sessions expire after 30 days. The local password test account is disabled by default. Do not expose the development server, trusted stdio process, or test credentials publicly.

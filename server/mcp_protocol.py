@@ -46,6 +46,8 @@ def call_tool(name, arguments):
         if name == 'upsert_workouts':
             if set(arguments) != {'workouts'}:
                 raise ValueError('Provide only the workouts argument.')
+            if app.supabase_backend_enabled():
+                return app.supabase_import_workouts(arguments.get('workouts'))
             return app.import_workouts(db, arguments.get('workouts'))
         if name == 'list_workouts':
             if set(arguments) - {'from_date', 'to_date'}:
@@ -57,6 +59,14 @@ def call_tool(name, arguments):
                 bounds[key] = date.fromisoformat(value)
             if bounds.get('from_date', date.min) > bounds.get('to_date', date.max):
                 raise ValueError('from_date must be before or equal to to_date.')
+            if app.supabase_backend_enabled():
+                remote = app.supabase_list_workouts()
+                result = []
+                for row in remote['workouts']:
+                    local_day = datetime.fromisoformat(row['starts_at'].replace('Z', '+00:00')).astimezone(ZoneInfo('Europe/Copenhagen')).date()
+                    if bounds.get('from_date', date.min) <= local_day <= bounds.get('to_date', date.max):
+                        result.append(row)
+                return {'workouts': result}
             rows = db.execute('SELECT w.*, (SELECT COUNT(*) FROM attendance a WHERE a.workout_id=w.id) AS attendees FROM workouts w ORDER BY starts_at').fetchall()
             result = []
             for row in rows:

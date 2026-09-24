@@ -23,6 +23,8 @@ SECURE_COOKIE = os.environ.get('SECURE_COOKIES', 'false').lower() == 'true'
 GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.environ.get('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI = os.environ.get('GOOGLE_REDIRECT_URI', '')
+SUPABASE_URL = os.environ.get('SUPABASE_URL', '').rstrip('/')
+SUPABASE_SERVICE_ROLE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY', '')
 ALLOW_TEST_LOGIN = os.environ.get('ALLOW_TEST_LOGIN', 'false').lower() == 'true'
 TEST_EMAIL = os.environ.get('TEST_LOGIN_EMAIL', 'test@example.com')
 TEST_PASSWORD = os.environ.get('TEST_LOGIN_PASSWORD', 'RunClub-test-2026!')
@@ -105,6 +107,39 @@ def password_hash(password, salt=None):
 
 def google_enabled():
     return bool(GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET)
+
+
+def supabase_backend_enabled():
+    return bool(SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)
+
+
+def supabase_request(method, path, payload=None, query=''):
+    body = json.dumps(payload, ensure_ascii=False).encode() if payload is not None else None
+    request = urllib.request.Request(f'{SUPABASE_URL}/rest/v1/{path}{query}', data=body, method=method,
+                                     headers={'apikey': SUPABASE_SERVICE_ROLE_KEY, 'Authorization': f'Bearer {SUPABASE_SERVICE_ROLE_KEY}',
+                                              'Content-Type': 'application/json', 'Accept': 'application/json',
+                                              'Prefer': 'resolution=merge-duplicates,return=representation'})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        content = response.read()
+        return json.loads(content) if content else []
+
+
+def supabase_import_workouts(values):
+    if not isinstance(values, list) or not 1 <= len(values) <= 100:
+        raise ValueError('workouts must be an array containing 1 to 100 workouts.')
+    workouts = [validate_workout(item) for item in values]
+    if len({w['external_id'] for w in workouts}) != len(workouts):
+        raise ValueError('external_id must be unique within the import.')
+    payload = [{**workout, 'translations': json.loads(workout['translations'])} for workout in workouts]
+    result = supabase_request('POST', 'workouts', payload, '?on_conflict=external_id')
+    return {'imported': len(result)}
+
+
+def supabase_list_workouts():
+    rows = supabase_request('GET', 'workouts', query='?select=*&order=starts_at.asc')
+    counts = supabase_request('GET', 'workout_attendee_counts', query='?select=workout_id,attendees')
+    count_by_id = {row['workout_id']: row['attendees'] for row in counts}
+    return {'workouts': [{**row, 'attendees': count_by_id.get(row['id'], 0)} for row in rows]}
 
 
 def redirect_uri(handler):
