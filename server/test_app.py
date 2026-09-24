@@ -103,6 +103,7 @@ class ClubTests(unittest.TestCase):
 
     def test_origin_and_past_run_protection(self):
         self.assertEqual(self.request('/api/register', 'POST', {}, {'Origin': 'https://evil.example'})[0], 403)
+        self.assertEqual(self.request('/api/register', 'POST', {'name': 'Local Runner', 'email': 'local@example.com', 'password': 'local-password-123'}, {'Origin': 'http://localhost:5173'})[0], 201)
         self.register()
         self.import_run({**self.workout, 'starts_at': '2020-01-01T10:00:00+01:00'})
         self.assertEqual(self.request('/api/workouts/1/attendance', 'POST', {})[0], 409)

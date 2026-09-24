@@ -71,7 +71,11 @@ def init_db(seed=True):
         if 'alias' not in user_columns:
             db.execute("ALTER TABLE users ADD COLUMN alias TEXT NOT NULL DEFAULT ''")
         if 'google_sub' not in user_columns:
-            db.execute("ALTER TABLE users ADD COLUMN google_sub TEXT UNIQUE")
+            # SQLite cannot add a UNIQUE column constraint with ALTER TABLE;
+            # add the nullable identity column, then enforce uniqueness with
+            # an index. Existing password users remain linkable to Google.
+            db.execute("ALTER TABLE users ADD COLUMN google_sub TEXT")
+        db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_unique ON users(google_sub)")
         if ALLOW_TEST_LOGIN and not db.execute('SELECT 1 FROM users WHERE email=?', (TEST_EMAIL.lower(),)).fetchone():
             db.execute('INSERT INTO users (name,alias,email,password_hash) VALUES (?,?,?,?)',
                        ('Local test account', 'Test Runner', TEST_EMAIL.lower(), password_hash(TEST_PASSWORD)))
@@ -109,6 +113,19 @@ def redirect_uri(handler):
 
 def safe_return_to(value):
     return value if isinstance(value, str) and value.startswith('/') and not value.startswith('//') else '/'
+
+
+def origin_allowed(origin, host):
+    """Allow Vite's localhost proxy during development; require same host in production."""
+    if not origin:
+        return True
+    origin_parts, host_parts = urlsplit(origin), urlsplit(f'//{host}')
+    if origin_parts.scheme not in ('http', 'https') or not origin_parts.hostname or not host_parts.hostname:
+        return False
+    loopback = {'localhost', '127.0.0.1', '::1'}
+    if origin_parts.hostname in loopback and host_parts.hostname in loopback:
+        return True
+    return origin_parts.hostname == host_parts.hostname and (origin_parts.scheme == 'https' or host_parts.hostname in loopback)
 
 
 def google_request(url, values):
@@ -250,7 +267,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.google_callback()
         if path == '/mcp':
             origin = self.headers.get('Origin')
-            if origin and urlsplit(origin).netloc != self.headers.get('Host'):
+            if not origin_allowed(origin, self.headers.get('Host', '')):
                 return self.reply(403, {'error': 'Cross-origin requests are not allowed.'})
             return self.reply(405, {'error': 'Use POST for the stateless MCP endpoint.'})
         if path.startswith('/api/'):
@@ -341,7 +358,7 @@ class Handler(SimpleHTTPRequestHandler):
 
     def mutate(self):
         origin = self.headers.get('Origin')
-        if origin and urlsplit(origin).netloc != self.headers.get('Host'):
+        if not origin_allowed(origin, self.headers.get('Host', '')):
             return self.reply(403, {'error': 'Cross-origin writes are not allowed.'})
         try:
             self.route_mutation()

@@ -269,9 +269,6 @@ function WorkoutCard({ workout, onDetails, onJoin, busy }) {
           <span />
           {t(workout.kind)}
         </span>
-        <span className="card-day">
-          {format(workout.starts_at, { weekday: "short", day: "numeric" })}
-        </span>
       </div>
       <button className="card-title" onClick={() => onDetails(workout)}>
         <h3>{workout.title}</h3>
@@ -282,6 +279,10 @@ function WorkoutCard({ workout, onDetails, onJoin, busy }) {
         {format(workout.starts_at, { hour: "2-digit", minute: "2-digit" })}
         <span>·</span>
         {workout.duration_minutes} min
+        <span>·</span>
+        <span className="card-day">
+          {format(workout.starts_at, { weekday: "short", day: "numeric" })}
+        </span>
       </div>
       <div className="run-metrics">
         <div>
