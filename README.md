@@ -1,6 +1,26 @@
 # Thor’s Running Club
 
-A React running-club website with a weekly workout calendar, Danish/English localization, accounts, attendance, Google Maps links, an introduction, and a glossary. A Python/SQLite backend serves both the web API and MCP tools for publishing workouts from an assistant.
+A React running-club website with a weekly workout calendar, Danish/English localization, Google sign-in, editable aliases, attendance, Google Maps links, an introduction, and a glossary. Supabase is the production database/auth backend; the Python/SQLite server remains available for local development and MCP publishing.
+
+## Vercel + Supabase deployment
+
+Supabase is a hosted PostgreSQL service with authentication and row-level security. The browser uses the public Supabase anon key; the SQL policies in [supabase/schema.sql](supabase/schema.sql) restrict profiles and sign-ups to the signed-in member while leaving the workout schedule public.
+
+1. Create a Supabase project at [supabase.com](https://supabase.com/).
+2. Open **SQL Editor**, paste [supabase/schema.sql](supabase/schema.sql), and run it.
+3. In Supabase **Authentication → Providers → Google**, enable Google and add the Google client ID/secret. Set the callback URL shown by Supabase in Google Cloud Console. Add your local and Vercel site URLs under **Authentication → URL Configuration**.
+4. In Vercel, add these variables to Preview and Production:
+
+```text
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-public-anon-key
+```
+
+5. Deploy the Vite project to Vercel. The frontend automatically uses Supabase when those variables exist. Never put a Supabase service-role key in `VITE_*` variables or browser code.
+
+The Vercel frontend no longer depends on the Python server for workouts, profiles, attendance, or Google login. Vercel’s frontend deployment and environment model is documented [here](https://vercel.com/docs/frameworks/frontend/vite). Supabase’s anon key is intended for browser use only with appropriate row-level security policies; the service-role key must remain server-side.
+
+The current Python server still supports local SQLite development, the local test account, REST imports, and MCP tools. MCP publishing does not yet write to Supabase; for a production MCP workflow, the MCP server should be moved to a server-side function using a Supabase service-role key kept outside the browser.
 
 ## Run locally
 
@@ -18,6 +38,8 @@ npm run dev
 ```
 
 Open the URL Vite prints (normally http://localhost:5173). Vite proxies `/api` to http://127.0.0.1:8000. SQLite is created at `data/club.sqlite3`. An empty database is seeded with three weeks of labeled example runs around the current week. Set `SEED_DEMO=false` before first launch for an empty real schedule. Changing this later does not delete existing data.
+
+When `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are present, the frontend uses Supabase. Without them it uses the local Python API described below.
 
 ### WSL projects under `/mnt/c`
 
@@ -40,9 +62,9 @@ Workout titles, notes, pace descriptions, and locations accept `translations.da`
 
 ## Sign-in and aliases
 
-Production sign-in uses Google OpenID Connect. The app stores Google’s stable account subject (`sub`) as the identity key, never a Google password. The Google display name is kept as account metadata; each member can choose a separate club alias that is shown in the app. The OAuth flow uses a server-side authorization code, a short-lived state cookie, a verified email identity, and an HttpOnly session cookie. Google sign-in is disabled until the required server variables are configured.
+Production sign-in uses Supabase Auth with Google OpenID Connect. The app stores the provider identity in Supabase Auth, never a Google password. The Google display name is kept as account metadata; each member can choose a separate club alias that is shown in the app. Supabase manages the authorization-code exchange, token validation, and browser session. Google sign-in is enabled when the two `VITE_SUPABASE_*` variables are configured and the Google provider is enabled in Supabase.
 
-Create Google OAuth credentials in Google Cloud Console as a Web application, then configure the authorized redirect URI to exactly match `GOOGLE_REDIRECT_URI` (for example `https://club.example.com/api/auth/google/callback`). Set:
+For the production frontend, configure Google credentials in Supabase **Authentication → Providers → Google** and use the Supabase callback URL shown there. Add both your local URL and Vercel URL to Supabase **Authentication → URL Configuration**. The following variables are only for the optional local Python OAuth server:
 
 ```bash
 export GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"

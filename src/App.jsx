@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { api, supabaseConfigured, subscribeToAuth } from "./backend.js";
 import {
   LanguageContext,
   initialLanguage,
@@ -48,23 +49,6 @@ function mondayFor(date) {
   return d;
 }
 const addDays = (date, days) => new Date(date.getTime() + days * 86400000);
-async function api(path, method = "GET", data) {
-  const response = await fetch(`/api${path}`, {
-    method,
-    headers: { "Content-Type": "application/json" },
-    ...(data !== undefined && { body: JSON.stringify(data) }),
-  });
-  let result;
-  try {
-    result = await response.json();
-  } catch {
-    throw new Error("The server is unavailable. Please try again shortly.");
-  }
-  if (!response.ok)
-    throw new Error(result.error || "Something went wrong. Please try again.");
-  return result;
-}
-
 function Modal({ children, onClose, label }) {
   const { t } = useTranslation();
   const ref = useRef(null);
@@ -149,7 +133,11 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining, googleEnabled, 
             )}
       </p>
       {googleEnabled && (
-        <a className="google-button" href={`/api/auth/google/start?return_to=${encodeURIComponent(window.location.pathname)}`}>
+        <a className="google-button" href={supabaseConfigured ? "#" : `/api/auth/google/start?return_to=${encodeURIComponent(window.location.pathname)}`} onClick={async event => {
+          if (!supabaseConfigured) return;
+          event.preventDefault();
+          try { await api("/auth/google/start"); } catch (err) { setError(err.message); }
+        }}>
           <span className="google-mark">G</span>
           {t("Continue with Google")}
           <ArrowRight size={17} />
@@ -403,7 +391,7 @@ function ClubApp({ setLanguage }) {
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
-  const [authConfig, setAuthConfig] = useState({ google_enabled: false, test_login_enabled: false });
+  const [authConfig, setAuthConfig] = useState({ google_enabled: supabaseConfigured, test_login_enabled: !supabaseConfigured && import.meta.env.VITE_ALLOW_TEST_LOGIN === "true" });
   const [aliasModal, setAliasModal] = useState(false);
 
   async function load() {
@@ -422,6 +410,9 @@ function ClubApp({ setLanguage }) {
   }
   useEffect(() => {
     load();
+    let unsubscribe;
+    subscribeToAuth(load).then(cleanup => { unsubscribe = cleanup; });
+    return () => unsubscribe?.();
   }, []);
   useEffect(() => {
     if (!toast) return;
