@@ -8,6 +8,13 @@
       "when": 1790484479034,
       "tag": "0000_fine_goblin_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790524532350,
+      "tag": "0001_amazing_morph",
+      "breakpoints": true
     }
   ]
 }

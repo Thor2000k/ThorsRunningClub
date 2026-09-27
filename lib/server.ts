@@ -1,11 +1,16 @@
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { attendance, users, workouts } from "@/lib/db/schema";
+import { attendance, comments, users, workouts } from "@/lib/db/schema";
+import { localAddComment, localComments, localMode, localProfile, localUser, localWorkouts, localUpsert } from "@/lib/local";
 
 export async function currentUser() {
   const session = await auth();
   if (!session?.user?.id) return null;
+  if (localMode) {
+    const user = await localUser(session.user.id);
+    return user ? { id: user.id, name: user.name, alias: user.alias, email: user.email } : null;
+  }
   const [user] = await db.select({ id: users.id, name: users.name, alias: users.alias, email: users.email })
     .from(users).where(eq(users.id, session.user.id)).limit(1);
   return user || null;
@@ -30,6 +35,7 @@ export function serializeWorkout(row: typeof workouts.$inferSelect, attendeeCoun
 }
 
 export async function listWorkouts(userId?: string | null) {
+  if (localMode) return localWorkouts(userId);
   const rows = await db.select().from(workouts).orderBy(asc(workouts.startsAt));
   const counts = await db.select({ workoutId: attendance.workoutId, attendees: sql<number>`count(*)::int` })
     .from(attendance).groupBy(attendance.workoutId);
@@ -61,10 +67,43 @@ export async function upsertWorkouts(values: any[]) {
   if (!Array.isArray(values) || values.length < 1 || values.length > 100) throw new Error("workouts must be an array containing 1 to 100 workouts.");
   const parsed = values.map(validateWorkout);
   if (new Set(parsed.map((item) => item.externalId)).size !== parsed.length) throw new Error("external_id values must be unique within the batch.");
+  if (localMode) return localUpsert(parsed.map((item) => ({ ...item, external_id: item.externalId, starts_at: item.startsAt.toISOString(), distance_km: Number(item.distanceKm), duration_minutes: item.durationMinutes })));
   await db.transaction(async (tx) => {
     for (const workout of parsed) {
       await tx.insert(workouts).values(workout).onConflictDoUpdate({ target: workouts.externalId, set: workout });
     }
   });
   return { imported: parsed.length };
+}
+
+export async function listComments(workoutId: number, limit?: number) {
+  if (localMode) return localComments(workoutId, limit);
+  const rows = await db.select({ id: comments.id, workoutId: comments.workoutId, body: comments.body, createdAt: comments.createdAt, author: users.alias })
+    .from(comments).innerJoin(users, eq(comments.userId, users.id)).where(eq(comments.workoutId, workoutId)).orderBy(desc(comments.createdAt));
+  return typeof limit === "number" ? rows.slice(0, limit) : rows;
+}
+
+export async function addComment(userId: string, workoutId: number, body: string) {
+  if (localMode) return localAddComment(userId, workoutId, body);
+  const [workout] = await db.select({ id: workouts.id }).from(workouts).where(eq(workouts.id, workoutId)).limit(1);
+  if (!workout) return null;
+  const [comment] = await db.insert(comments).values({ workoutId, userId, body }).returning({ id: comments.id, workoutId: comments.workoutId, body: comments.body, createdAt: comments.createdAt });
+  const [author] = await db.select({ author: users.alias }).from(users).where(eq(users.id, userId)).limit(1);
+  return { ...comment, author: author?.author || "Runner" };
+}
+
+export async function profileSummary(userId: string) {
+  if (localMode) return localProfile(userId);
+  const user = await currentUser();
+  if (!user || user.id !== userId) return null;
+  const joined = await db.select({
+    id: workouts.id, external_id: workouts.externalId, title: workouts.title, kind: workouts.kind,
+    starts_at: workouts.startsAt, distance_km: workouts.distanceKm, duration_minutes: workouts.durationMinutes,
+    pace: workouts.pace, location: workouts.location, notes: workouts.notes, translations: workouts.translations,
+  }).from(attendance).innerJoin(workouts, eq(attendance.workoutId, workouts.id)).where(eq(attendance.userId, userId)).orderBy(desc(workouts.startsAt));
+  const authored = await db.select({ count: sql<number>`count(*)::int` }).from(comments).where(eq(comments.userId, userId));
+  const completed = joined.filter((workout) => workout.starts_at <= new Date());
+  const upcoming = joined.filter((workout) => workout.starts_at > new Date()).reverse();
+  const serialize = (workout: typeof joined[number]) => ({ ...workout, starts_at: workout.starts_at.toISOString(), distance_km: Number(workout.distance_km) });
+  return { user, stats: { completed: completed.length, upcoming: upcoming.length, distance: completed.reduce((total, workout) => total + Number(workout.distance_km), 0), comments: Number(authored[0]?.count || 0) }, completed: completed.map(serialize), upcoming: upcoming.map(serialize) };
 }

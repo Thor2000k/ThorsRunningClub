@@ -6,10 +6,12 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 import { verifyPassword } from "@/lib/security";
+import { localMode, localUser, localUserByEmail, testLoginEnabled } from "@/lib/local";
 
-const allowTestLogin = process.env.ALLOW_TEST_LOGIN === "true";
+const allowTestLogin = testLoginEnabled;
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: process.env.AUTH_SECRET || (localMode ? "local-development-only-secret-change-me" : undefined),
   adapter: DrizzleAdapter(db),
   session: { strategy: allowTestLogin ? "jwt" : "database" },
   providers: [
@@ -22,9 +24,9 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const email = String(credentials?.email || "").trim().toLowerCase();
         const password = String(credentials?.password || "");
         if (!email || !password) return null;
-        const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+        const user = localMode ? await localUserByEmail(email) : (await db.select().from(users).where(eq(users.email, email)).limit(1))[0];
         if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) return null;
-        return { id: user.id, name: user.name, email: user.email, image: user.image };
+        return { id: user.id, name: user.name, email: user.email, image: (user as any).image };
       },
     })] : []),
   ],
@@ -37,7 +39,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const id = user?.id || token.sub;
       if (session.user && id) {
         session.user.id = id;
-        const [profile] = await db.select({ alias: users.alias }).from(users).where(eq(users.id, id)).limit(1);
+        const profile = localMode ? await localUser(id) : (await db.select({ alias: users.alias }).from(users).where(eq(users.id, id)).limit(1))[0];
         session.user.alias = profile?.alias || user?.name || session.user.name || session.user.email?.split("@")[0] || "Runner";
       }
       return session;

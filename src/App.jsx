@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { signIn, signOut } from "next-auth/react";
 import { api, supabaseConfigured, subscribeToAuth } from "./backend.js";
 import {
@@ -251,7 +251,43 @@ function AliasModal({ user, onClose, onSaved }) {
   </Modal>;
 }
 
-function WorkoutCard({ workout, onDetails, onJoin, busy }) {
+function CommentsSection({ workout, user, onSignIn, expanded = false }) {
+  const { t, language } = useTranslation();
+  const queryClient = useQueryClient();
+  const [showAll, setShowAll] = useState(expanded);
+  const [body, setBody] = useState("");
+  const commentsQuery = useQuery({ queryKey: ["comments", workout.id], queryFn: () => api(`/workouts/${workout.id}/comments`), staleTime: 15_000 });
+  const commentMutation = useMutation({
+    mutationFn: (value) => api(`/workouts/${workout.id}/comments`, "POST", { body: value }),
+    onSuccess: () => { setBody(""); queryClient.invalidateQueries({ queryKey: ["comments", workout.id] }); },
+  });
+  const comments = commentsQuery.data?.comments || [];
+  const visible = showAll ? comments : comments.slice(0, 2);
+  function submit(event) {
+    event.preventDefault();
+    if (!body.trim()) return;
+    if (!user) { onSignIn(); return; }
+    commentMutation.mutate(body.trim());
+  }
+  return <section className={`comments-section ${showAll ? "expanded" : ""}`} aria-label={t("Comments")}>
+    <div className="comments-heading"><h3>{t("Comments")}</h3><span>{comments.length}</span></div>
+    {visible.length > 0 && <div className="comment-list">
+      {visible.map((comment) => <article className="comment" key={comment.id}>
+        <div><strong>{comment.author}</strong><time dateTime={comment.createdAt}>{new Intl.DateTimeFormat(language === "da" ? "da-DK" : "en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(comment.createdAt))}</time></div>
+        <p>{comment.body}</p>
+      </article>)}
+    </div>}
+    {!comments.length && <p className="comments-empty">{t("No comments yet. Start the conversation.")}</p>}
+    {comments.length > 2 && <button className="comments-toggle" type="button" onClick={() => setShowAll((value) => !value)}>{showAll ? t("Show fewer comments") : t("Show all comments")}</button>}
+    <form className="comment-form" onSubmit={submit}>
+      <input value={body} onChange={(event) => setBody(event.target.value)} maxLength={500} placeholder={user ? t("Add a comment…") : t("Sign in to comment…")} aria-label={t("Comment")} />
+      <button className="comment-submit" disabled={commentMutation.isPending || !body.trim()}>{commentMutation.isPending ? t("Saving…") : t("Post")}</button>
+    </form>
+    {commentMutation.error && <p className="form-error">{t(commentMutation.error.message)}</p>}
+  </section>;
+}
+
+function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
   const { t, language } = useTranslation();
   const format = (date, options) => formatDate(date, options, language);
   const [mapOpen, setMapOpen] = useState(false);
@@ -321,6 +357,7 @@ function WorkoutCard({ workout, onDetails, onJoin, busy }) {
       <p className="card-notes">
         {workout.notes || t("Meet the crew, lace up, and enjoy the run.")}
       </p>
+      <CommentsSection workout={workout} user={user} onSignIn={onSignIn} />
       <div className="card-footer">
         <span className="attendees">
           <Users size={16} />
@@ -563,6 +600,7 @@ function ClubApp({ setLanguage }) {
           <a href="#glossary" onClick={() => setMobileNav(false)}>
             {t("Glossary")}
           </a>
+          {user && <a href="/profile" onClick={() => setMobileNav(false)}>{t("Profile")}</a>}
         </nav>
         <div className="account">
           <div
@@ -704,6 +742,8 @@ function ClubApp({ setLanguage }) {
                   onDetails={setDetails}
                   onJoin={toggleJoin}
                   busy={busyId === workout.id}
+                  user={user}
+                  onSignIn={() => setAuth("login")}
                 />
               ))}
 
@@ -847,6 +887,7 @@ function ClubApp({ setLanguage }) {
           <p className="detail-notes">
             {selectedWorkout.notes || t("No additional notes for this run.")}
           </p>
+          <CommentsSection workout={selectedWorkout} user={user} onSignIn={() => setAuth("login")} expanded />
           <h3>{t("Meet us here")}</h3>
           <a
             className="map-link"

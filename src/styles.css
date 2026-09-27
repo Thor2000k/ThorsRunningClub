@@ -101,6 +101,22 @@ h1, h2 { font-size: 29px; font-weight: 600; line-height: 1.25; letter-spacing: -
 .map-external { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; color: #b8d8c1; font-size: 10px; border-top: 1px solid #303b34; }
 .map-external:hover { color: #e0f0e3; background: #243229; }
 .card-notes { font-size: 11px; line-height: 1.85; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 41px; margin: 11px 0 18px; }
+.comments-section { border-top: 1px solid var(--line); padding: 12px 0 2px; }
+.comments-heading { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.comments-heading h3 { font-size: 11px; font-weight: 600; }
+.comments-heading span { min-width: 18px; padding: 2px 5px; border-radius: 10px; background: var(--raised); color: var(--muted); text-align: center; font-size: 9px; }
+.comment-list { display: grid; gap: 8px; }
+.comment { padding: 8px 9px; border-radius: 5px; background: #15181a; }
+.comment > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.comment strong { font-size: 10px; color: #d7e6da; }
+.comment time { color: var(--muted); font-size: 9px; }
+.comment p, .comments-empty { margin-top: 4px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.comments-empty { margin: 0 0 9px; }
+.comments-toggle { padding: 5px 0; background: none; color: var(--accent); font-size: 10px; }
+.comment-form { display: flex; gap: 6px; margin-top: 9px; }
+.comment-form input { min-width: 0; width: 100%; padding: 8px 9px; border: 1px solid var(--line); border-radius: 4px; background: #121416; color: #edf0ed; font-size: 10px; }
+.comment-submit { padding: 0 10px; border-radius: 4px; background: var(--raised); color: var(--accent); font-size: 10px; }
+.comment-submit:disabled { opacity: .45; }
 .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); padding: 14px 0; margin-top: auto; }
 .attendees { display: flex; align-items: center; gap: 7px; color: #aab3b8; font-size: 10px; }
 .join-button { display: flex; align-items: center; gap: 11px; min-height: 33px; padding: 8px 11px; font-size: 11px; font-weight: 500; border-radius: 4px; background: #2c3c32; color: #c9e4d1; }
@@ -155,6 +171,31 @@ footer > p, footer > span { font-size: 10px; color: #9ca69f; }
 .map-link > span { flex: 1; }
 .map-link small { display: block; font-size: 10px; color: #a0b1a6; margin-top: 3px; }
 .detail-bottom { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 27px; }
+.modal-content .comments-section { margin: 22px 0 24px; }
+.modal-content .comment { padding: 10px 11px; }
+.modal-content .comment p { font-size: 11px; }
+.profile-page { min-height: 100vh; }
+.profile-header { max-width: 1180px; min-height: 88px; margin: 0 auto; padding: 0 36px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
+.profile-header nav { display: flex; gap: 25px; font-size: 12px; color: var(--muted); }
+.profile-header nav a:hover, .back-link:hover { color: var(--accent); }
+.profile-section { max-width: 900px; margin: 0 auto; padding: 42px 36px 80px; }
+.back-link { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 11px; margin-bottom: 34px; }
+.profile-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 30px; border-bottom: 1px solid var(--line); }
+.profile-heading h1 { margin: 6px 0 4px; }
+.profile-mark { width: 58px; height: 58px; display: grid; place-items: center; border: 1px solid #46534b; border-radius: 12px; color: var(--accent); }
+.profile-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 22px 0 48px; }
+.profile-stats > div { display: flex; flex-direction: column; gap: 7px; padding: 16px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.profile-stats svg { color: var(--accent); }
+.profile-stats strong { font-size: 20px; font-weight: 600; }
+.profile-stats span { color: var(--muted); font-size: 10px; line-height: 1.4; }
+.history-section { margin-top: 38px; }
+.history-section .section-heading { margin-bottom: 14px; }
+.history-list { display: grid; gap: 8px; }
+.history-item { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.history-item h3 { margin: 9px 0 5px; font-size: 14px; font-weight: 600; }
+.history-item p { color: var(--muted); font-size: 11px; line-height: 1.5; }
+.history-item > svg { color: var(--accent); }
+.history-empty { padding: 22px 0; color: var(--muted); font-size: 12px; }
 .toast { position: fixed; bottom: 25px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 30px); width: max-content; padding: 15px 18px; border-radius: 8px; background: #283c2f; border: 1px solid #54735e; color: #e2f0e5; box-shadow: 0 8px 30px #0006; display: flex; align-items: center; gap: 11px; font-size: 12px; z-index: 10; }
 .toast button { display: flex; background: transparent; color: #c3d7ca; padding: 2px; }
 .error-banner { display: flex; align-items: center; justify-content: space-between; gap: 15px; padding: 16px; margin-bottom: 20px; background: #362721; border: 1px solid #614638; color: #efbfad; font-size: 12px; line-height: 1.6; border-radius: 6px; }
@@ -225,6 +266,10 @@ footer > p, footer > span { font-size: 10px; color: #9ca69f; }
   .calendar-footnote > span:first-child { display: block; }
   .small-dot { margin-right: 4px; }
   .modal-content { padding: 30px 24px; }
+  .profile-header { padding-inline: 20px; }
+  .profile-header nav { display: none; }
+  .profile-section { padding: 30px 20px 60px; }
+  .profile-stats { grid-template-columns: repeat(2, 1fr); margin-bottom: 35px; }
   .modal h2 { font-size: 25px; }
   .detail-metrics { gap: 14px; }
   .detail-bottom .button { font-size: 11px; padding: 12px 15px; }

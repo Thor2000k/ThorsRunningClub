@@ -41,6 +41,13 @@ The Google callback URL is `/api/auth/callback/google`. In production, set `AUTH
 
 For local-only automated testing, set `ALLOW_TEST_LOGIN=true`. This enables the gated credentials provider and `/api/register` and `/api/login`; keep it disabled in production.
 
+When no `DATABASE_URL` is present in development, the app automatically uses a local JSON store at `data/next-local.json`, seeds demo workouts, and creates this test account:
+
+```text
+test@example.com
+RunClub-test-2026!
+```
+
 ## Database
 
 Drizzle schema is in [lib/db/schema.ts](lib/db/schema.ts). Generate and apply migrations with:
@@ -74,8 +81,10 @@ The existing workout payload shape remains compatible with `examples/workouts.js
 | `GET /api/workouts` | Schedule, attendance counts, and the signed-in user’s joined state |
 | `GET /api/me` | Current user or `null` |
 | `PATCH /api/me` | Update the signed-in user’s alias |
+| `GET /api/profile` | Completed and upcoming workout history for the signed-in user |
 | `POST /api/workouts/:id/attendance` | Join an upcoming workout |
 | `DELETE /api/workouts/:id/attendance` | Leave a workout |
+| `GET/POST /api/workouts/:id/comments` | Read a workout thread or add a comment as the signed-in member |
 | `/api/auth/*` | Auth.js Google OAuth and session endpoints |
 | `POST /api/mcp` | Protected MCP JSON-RPC endpoint |
 

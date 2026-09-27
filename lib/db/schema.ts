@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { boolean, integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { integer, jsonb, numeric, pgTable, primaryKey, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const users = pgTable("users", {
   id: text("id").primaryKey(),
@@ -58,9 +58,21 @@ export const attendance = pgTable("attendance", {
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
 }, (table) => ({ compoundKey: primaryKey({ columns: [table.userId, table.workoutId] }) }));
 
+export const comments = pgTable("workout_comments", {
+  id: integer("id").generatedAlwaysAsIdentity().primaryKey(),
+  workoutId: integer("workout_id").notNull().references(() => workouts.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  body: text("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+});
+
 export const userRelations = relations(users, ({ many }) => ({ attendance: many(attendance) }));
 export const workoutRelations = relations(workouts, ({ many }) => ({ attendance: many(attendance) }));
 export const attendanceRelations = relations(attendance, ({ one }) => ({
   user: one(users, { fields: [attendance.userId], references: [users.id] }),
   workout: one(workouts, { fields: [attendance.workoutId], references: [workouts.id] }),
+}));
+export const commentRelations = relations(comments, ({ one }) => ({
+  user: one(users, { fields: [comments.userId], references: [users.id] }),
+  workout: one(workouts, { fields: [comments.workoutId], references: [workouts.id] }),
 }));
