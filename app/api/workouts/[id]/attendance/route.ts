@@ -1,0 +1,29 @@
+import { NextResponse } from "next/server";
+import { and, eq } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { attendance, workouts } from "@/lib/db/schema";
+import { requireUser } from "@/lib/server";
+
+export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireUser();
+    const id = Number((await params).id);
+    const [workout] = await db.select().from(workouts).where(eq(workouts.id, id)).limit(1);
+    if (!workout) return NextResponse.json({ error: "Workout not found." }, { status: 404 });
+    if (workout.startsAt <= new Date()) return NextResponse.json({ error: "This run has already started." }, { status: 409 });
+    await db.insert(attendance).values({ userId: user.id, workoutId: id }).onConflictDoNothing();
+    return NextResponse.json({ joined: true });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Database operation failed." }, { status: error instanceof Error && error.message.startsWith("Sign in") ? 401 : 500 });
+  }
+}
+
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const user = await requireUser();
+    await db.delete(attendance).where(and(eq(attendance.userId, user.id), eq(attendance.workoutId, Number((await params).id))));
+    return NextResponse.json({ joined: false });
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Database operation failed." }, { status: error instanceof Error && error.message.startsWith("Sign in") ? 401 : 500 });
+  }
+}

@@ -208,13 +208,14 @@ export const translations = {
 };
 
 export function initialLanguage() {
+  if (typeof window === "undefined") return "en";
   try {
     const saved = localStorage.getItem("trc-language");
     if (saved === "da" || saved === "en") return saved;
   } catch {
     /* Storage can be disabled. */
   }
-  return navigator.language?.startsWith("da") ? "da" : "en";
+  return window.navigator.language?.startsWith("da") ? "da" : "en";
 }
 export function translate(language, key, values = {}) {
   let text = language === "da" ? translations[key] || key : key;

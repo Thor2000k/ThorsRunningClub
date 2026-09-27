@@ -1,4 +1,8 @@
+"use client";
+
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { signIn, signOut } from "next-auth/react";
 import { api, supabaseConfigured, subscribeToAuth } from "./backend.js";
 import {
   LanguageContext,
@@ -104,7 +108,12 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining, googleEnabled, 
         "POST",
         data,
       );
-      await onSuccess(result.user);
+      if (testLoginEnabled) {
+        const session = await signIn("test-credentials", { email: data.email, password: data.password, redirect: false });
+        if (session?.error) throw new Error("Email or password is incorrect.");
+        const account = await api("/me");
+        await onSuccess(account.user);
+      } else await onSuccess(result.user);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -133,7 +142,7 @@ function AuthModal({ mode, setMode, onClose, onSuccess, joining, googleEnabled, 
             )}
       </p>
       {googleEnabled && (
-        <a className="google-button" href={supabaseConfigured ? "#" : `/api/auth/google/start?return_to=${encodeURIComponent(window.location.pathname)}`} onClick={async event => {
+      <a className="google-button" href={`/api/auth/signin/google?callbackUrl=${encodeURIComponent(window.location.pathname)}`} onClick={async event => {
           if (!supabaseConfigured) return;
           event.preventDefault();
           try { await api("/auth/google/start"); } catch (err) { setError(err.message); }
@@ -377,6 +386,7 @@ const glossary = [
 
 function ClubApp({ setLanguage }) {
   const { t, language } = useTranslation();
+  const queryClient = useQueryClient();
   const format = (date, options) => formatDate(date, options, language);
   const [user, setUser] = useState(null);
   const [workouts, setWorkouts] = useState([]);
@@ -391,8 +401,25 @@ function ClubApp({ setLanguage }) {
   const [busyId, setBusyId] = useState(null);
   const [toast, setToast] = useState("");
   const [mobileNav, setMobileNav] = useState(false);
-  const [authConfig, setAuthConfig] = useState({ google_enabled: supabaseConfigured, test_login_enabled: !supabaseConfigured && import.meta.env.VITE_ALLOW_TEST_LOGIN === "true" });
+  const [authConfig, setAuthConfig] = useState({ google_enabled: false, test_login_enabled: false });
   const [aliasModal, setAliasModal] = useState(false);
+  const workoutsQuery = useQuery({
+    queryKey: ["workouts"],
+    queryFn: () => api("/workouts"),
+    staleTime: 30_000,
+  });
+  const meQuery = useQuery({ queryKey: ["me"], queryFn: () => api("/me"), staleTime: 30_000 });
+  const authConfigQuery = useQuery({ queryKey: ["auth-config"], queryFn: () => api("/auth/config"), staleTime: 300_000 });
+
+  useEffect(() => {
+    if (workoutsQuery.data?.workouts) setWorkouts(workoutsQuery.data.workouts);
+  }, [workoutsQuery.data]);
+  useEffect(() => {
+    if (meQuery.data) setUser(meQuery.data.user);
+  }, [meQuery.data]);
+  useEffect(() => {
+    if (authConfigQuery.data) setAuthConfig(authConfigQuery.data);
+  }, [authConfigQuery.data]);
 
   async function load() {
     setLoading(true);
@@ -446,6 +473,7 @@ function ClubApp({ setLanguage }) {
             : w,
         ),
       );
+      queryClient.invalidateQueries({ queryKey: ["workouts"] });
       setToast(
         workout.joined
           ? t("You’ve left this run. See you on the next one.")
@@ -476,7 +504,7 @@ function ClubApp({ setLanguage }) {
   }
   async function logout() {
     try {
-      await api("/logout", "POST", {});
+      await signOut({ redirect: false });
       setUser(null);
       setMine(false);
       setWorkouts((current) => current.map((w) => ({ ...w, joined: false })));
