@@ -9,6 +9,7 @@
     "start": "next start --hostname 0.0.0.0",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:seed": "node scripts/seed.mjs",
     "typecheck": "tsc --noEmit",
     "test": "python3 -m unittest discover -s server -p 'test_*.py'",
     "test:e2e": "playwright test"

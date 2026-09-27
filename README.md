@@ -48,6 +48,14 @@ test@example.com
 RunClub-test-2026!
 ```
 
+To seed the same demo workouts and test user into a hosted Neon database, first apply migrations, temporarily set `ALLOW_TEST_LOGIN=true` in the target Vercel environment, then run:
+
+```bash
+vercel env run -e production -- npm run db:seed
+```
+
+The seed command is idempotent for the demo workouts and test email. Disable `ALLOW_TEST_LOGIN` again after testing if the deployment should use Google sign-in only.
+
 ## Database
 
 Drizzle schema is in [lib/db/schema.ts](lib/db/schema.ts). Generate and apply migrations with:
