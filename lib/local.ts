@@ -1,8 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { hashPassword } from "@/lib/security";
+import { databaseUrl } from "@/lib/env";
 
-export const localMode = !process.env.DATABASE_URL;
+export const localMode = process.env.NODE_ENV !== "production" && !databaseUrl;
 export const testLoginEnabled = process.env.ALLOW_TEST_LOGIN === "true" || (process.env.NODE_ENV !== "production" && process.env.ALLOW_TEST_LOGIN !== "false");
 const file = join(process.cwd(), "data", "next-local.json");
 
