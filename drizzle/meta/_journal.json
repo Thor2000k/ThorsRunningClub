@@ -15,6 +15,13 @@
       "when": 1790524532350,
       "tag": "0001_amazing_morph",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790703775944,
+      "tag": "0002_overrated_excalibur",
+      "breakpoints": true
     }
   ]
 }

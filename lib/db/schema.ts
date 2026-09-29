@@ -47,6 +47,7 @@ export const workouts = pgTable("workouts", {
   durationMinutes: integer("duration_minutes").notNull(),
   pace: text("pace").notNull(),
   location: text("location").notNull(),
+  routeUrl: text("route_url"),
   notes: text("notes").notNull().default(""),
   translations: jsonb("translations").$type<Record<string, Record<string, string>>>().notNull().default({}),
   createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),

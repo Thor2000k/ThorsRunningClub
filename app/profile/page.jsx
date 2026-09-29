@@ -44,7 +44,7 @@ function LanguageButtons() {
 }
 
 function WorkoutHistory({ title, empty, workouts, formatDate, completed, t }) {
-  return <section className="history-section"><div className="section-heading"><div><p className="eyebrow">{completed ? t("Your history") : t("On the calendar")}</p><h2>{title}</h2></div><span className="result-count">{workouts.length}</span></div>{workouts.length ? <div className="history-list">{workouts.map((workout) => <article className="history-item" key={workout.id}><div><span className={`kind-tag ${workout.kind.toLowerCase().replaceAll(" ", "-")}`}><span />{t(workout.kind)}</span><h3>{workout.title}</h3><p>{formatDate(workout.starts_at)} · {workout.distance_km} km · {workout.location}</p></div>{completed && <Trophy size={18} />}</article>)}</div> : <p className="history-empty">{empty}</p>}</section>;
+  return <section className="history-section"><div className="section-heading"><div><p className="eyebrow">{completed ? t("Your history") : t("On the calendar")}</p><h2>{title}</h2></div><span className="result-count">{workouts.length}</span></div>{workouts.length ? <div className="history-list">{workouts.map((workout) => <article className="history-item" key={workout.id}><div><span className={`kind-tag ${workout.kind.toLowerCase().replaceAll(" ", "-")}`}><span />{t(workout.kind)}</span><h3>{workout.title}</h3><p>{formatDate(workout.starts_at)} · {workout.distance_km} km · {workout.location}</p>{completed && <p className="participants"><strong>{t("Participants")}:</strong> {(workout.participants || []).join(", ") || t("No participants")}</p>}</div>{completed && <Trophy size={18} />}</article>)}</div> : <p className="history-empty">{empty}</p>}</section>;
 }
 
 export default function ProfilePage() {

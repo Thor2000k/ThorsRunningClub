@@ -82,6 +82,8 @@ Send `Authorization: Bearer <token>` and JSON-RPC requests. The available tools 
 
 The existing workout payload shape remains compatible with `examples/workouts.json`, including `translations.da` and `translations.en`.
 
+To attach a running route, include an optional `route_url` in a workout payload. Paste either an On The Go Map share URL or its iframe snippet. The route appears on the workout card, while the meeting location keeps its separate Google map. To add or change a route after publishing, call `upsert_workouts` again with the same `external_id`, the workout's current required fields, and the new `route_url`. Omitting `route_url` preserves an existing route; set it to `null` or an empty string to remove one. Apply the `0002_overrated_excalibur` database migration before using this field in production.
+
 ## API routes
 
 | Route | Purpose |

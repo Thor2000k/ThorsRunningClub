@@ -18,6 +18,7 @@ create table public.workouts (
   duration_minutes integer not null check (duration_minutes > 0 and duration_minutes <= 10080),
   pace text not null,
   location text not null,
+  route_url text,
   notes text not null default '',
   translations jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now()

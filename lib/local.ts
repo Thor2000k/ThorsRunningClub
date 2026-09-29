@@ -8,7 +8,7 @@ export const testLoginEnabled = process.env.ALLOW_TEST_LOGIN === "true" || (proc
 const file = join(process.cwd(), "data", "next-local.json");
 
 type LocalUser = { id: string; name: string; alias: string; email: string; passwordHash: string };
-type LocalWorkout = { id: number; external_id: string; title: string; kind: string; starts_at: string; distance_km: number; duration_minutes: number; pace: string; location: string; notes: string; translations: Record<string, Record<string, string>>; attendees: number; joined: boolean };
+type LocalWorkout = { id: number; external_id: string; title: string; kind: string; starts_at: string; distance_km: number; duration_minutes: number; pace: string; location: string; route_url?: string | null; notes: string; translations: Record<string, Record<string, string>>; attendees: number; joined: boolean };
 type LocalComment = { id: number; workoutId: number; userId: string; body: string; createdAt: string };
 type LocalData = { users: LocalUser[]; workouts: LocalWorkout[]; attendance: { userId: string; workoutId: number }[]; comments?: LocalComment[] };
 
@@ -78,10 +78,12 @@ export async function localProfile(userId: string) {
   if (!user) return null;
   const joinedIds = new Set(data.attendance.filter((item) => item.userId === userId).map((item) => item.workoutId));
   const joined = data.workouts.filter((workout) => joinedIds.has(workout.id)).sort((a, b) => b.starts_at.localeCompare(a.starts_at));
-  const completed = joined.filter((workout) => new Date(workout.starts_at) <= new Date());
-  const upcoming = joined.filter((workout) => new Date(workout.starts_at) > new Date()).reverse();
+  const participantNames = (workoutId: number) => data.attendance.filter((item) => item.workoutId === workoutId).map((item) => data.users.find((member) => member.id === item.userId)?.alias || "Runner");
+  const withParticipants = (workout: LocalWorkout) => ({ ...workout, participants: participantNames(workout.id) });
+  const completed = joined.filter((workout) => new Date(workout.starts_at) <= new Date()).map(withParticipants);
+  const upcoming = joined.filter((workout) => new Date(workout.starts_at) > new Date()).reverse().map(withParticipants);
   return { user: { id: user.id, name: user.name, alias: user.alias, email: user.email }, stats: { completed: completed.length, upcoming: upcoming.length, distance: completed.reduce((total, workout) => total + workout.distance_km, 0), comments: (data.comments || []).filter((comment) => comment.userId === userId).length }, completed, upcoming };
 }
 export async function localJoin(userId: string, workoutId: number) { const data = await ensureLocalData(); const workout = data.workouts.find((item) => item.id === workoutId); if (!workout) return "missing"; if (new Date(workout.starts_at) <= new Date()) return "past"; if (!data.attendance.some((item) => item.userId === userId && item.workoutId === workoutId)) data.attendance.push({ userId, workoutId }); write(data); return "joined"; }
 export async function localLeave(userId: string, workoutId: number) { const data = await ensureLocalData(); data.attendance = data.attendance.filter((item) => !(item.userId === userId && item.workoutId === workoutId)); write(data); }
-export async function localUpsert(rows: any[]) { const data = await ensureLocalData(); for (const row of rows) { const index = data.workouts.findIndex((item) => item.external_id === row.external_id); const value = { ...row, id: index >= 0 ? data.workouts[index].id : Math.max(0, ...data.workouts.map((item) => item.id)) + 1, attendees: index >= 0 ? data.workouts[index].attendees : 0, joined: false }; if (index >= 0) data.workouts[index] = value; else data.workouts.push(value); } write(data); return { imported: rows.length }; }
+export async function localUpsert(rows: any[]) { const data = await ensureLocalData(); for (const row of rows) { const index = data.workouts.findIndex((item) => item.external_id === row.external_id); const prior = index >= 0 ? data.workouts[index] : null; const value = { ...prior, ...row, id: prior?.id ?? Math.max(0, ...data.workouts.map((item) => item.id)) + 1, attendees: prior?.attendees ?? 0, joined: false }; if (index >= 0) data.workouts[index] = value; else data.workouts.push(value); } write(data); return { imported: rows.length }; }

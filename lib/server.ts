@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { attendance, comments, users, workouts } from "@/lib/db/schema";
 import { localAddComment, localComments, localMode, localProfile, localUser, localWorkouts, localUpsert } from "@/lib/local";
+import { normalizeRouteMap } from "@/lib/route-map";
 
 export async function currentUser() {
   const session = await auth();
@@ -26,6 +27,7 @@ export function serializeWorkout(row: typeof workouts.$inferSelect, attendeeCoun
   return {
     ...row,
     external_id: row.externalId,
+    route_url: row.routeUrl,
     starts_at: row.startsAt.toISOString(),
     distance_km: Number(row.distanceKm),
     duration_minutes: row.durationMinutes,
@@ -60,6 +62,7 @@ export function validateWorkout(value: any) {
     externalId: String(value.external_id), title: String(value.title), kind: String(value.kind), startsAt,
     distanceKm: String(value.distance_km), durationMinutes: Number(value.duration_minutes), pace: String(value.pace),
     location: String(value.location), notes: String(value.notes || ""), translations: value.translations || {},
+    ...(Object.hasOwn(value, "route_url") ? { routeUrl: normalizeRouteMap(value.route_url) } : {}),
   };
 }
 
@@ -67,7 +70,7 @@ export async function upsertWorkouts(values: any[]) {
   if (!Array.isArray(values) || values.length < 1 || values.length > 100) throw new Error("workouts must be an array containing 1 to 100 workouts.");
   const parsed = values.map(validateWorkout);
   if (new Set(parsed.map((item) => item.externalId)).size !== parsed.length) throw new Error("external_id values must be unique within the batch.");
-  if (localMode) return localUpsert(parsed.map((item) => ({ ...item, external_id: item.externalId, starts_at: item.startsAt.toISOString(), distance_km: Number(item.distanceKm), duration_minutes: item.durationMinutes })));
+  if (localMode) return localUpsert(parsed.map((item) => ({ ...item, external_id: item.externalId, starts_at: item.startsAt.toISOString(), distance_km: Number(item.distanceKm), duration_minutes: item.durationMinutes, ...(item.routeUrl !== undefined ? { route_url: item.routeUrl } : {}) })));
   await db.transaction(async (tx) => {
     for (const workout of parsed) {
       await tx.insert(workouts).values(workout).onConflictDoUpdate({ target: workouts.externalId, set: workout });
@@ -101,9 +104,12 @@ export async function profileSummary(userId: string) {
     starts_at: workouts.startsAt, distance_km: workouts.distanceKm, duration_minutes: workouts.durationMinutes,
     pace: workouts.pace, location: workouts.location, notes: workouts.notes, translations: workouts.translations,
   }).from(attendance).innerJoin(workouts, eq(attendance.workoutId, workouts.id)).where(eq(attendance.userId, userId)).orderBy(desc(workouts.startsAt));
+  const participantRows = await db.select({ workoutId: attendance.workoutId, alias: users.alias }).from(attendance).innerJoin(users, eq(attendance.userId, users.id));
+  const participantMap = new Map<number, string[]>();
+  for (const row of participantRows) participantMap.set(row.workoutId, [...(participantMap.get(row.workoutId) || []), row.alias || "Runner"]);
   const authored = await db.select({ count: sql<number>`count(*)::int` }).from(comments).where(eq(comments.userId, userId));
   const completed = joined.filter((workout) => workout.starts_at <= new Date());
   const upcoming = joined.filter((workout) => workout.starts_at > new Date()).reverse();
-  const serialize = (workout: typeof joined[number]) => ({ ...workout, starts_at: workout.starts_at.toISOString(), distance_km: Number(workout.distance_km) });
+  const serialize = (workout: typeof joined[number]) => ({ ...workout, starts_at: workout.starts_at.toISOString(), distance_km: Number(workout.distance_km), participants: participantMap.get(workout.id) || [] });
   return { user, stats: { completed: completed.length, upcoming: upcoming.length, distance: completed.reduce((total, workout) => total + Number(workout.distance_km), 0), comments: Number(authored[0]?.count || 0) }, completed: completed.map(serialize), upcoming: upcoming.map(serialize) };
 }

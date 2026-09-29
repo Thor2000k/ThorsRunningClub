@@ -291,6 +291,7 @@ function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
   const { t, language } = useTranslation();
   const format = (date, options) => formatDate(date, options, language);
   const [mapOpen, setMapOpen] = useState(false);
+  const [routeOpen, setRouteOpen] = useState(false);
   const past = new Date(workout.starts_at) <= new Date();
   const kindClass = workout.kind.toLowerCase().replaceAll(" ", "-");
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workout.location)}`;
@@ -353,6 +354,34 @@ function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
             {t("Open in Google Maps")} <ArrowUpRight size={13} />
           </a>
         </div>
+      )}
+      {workout.route_url && (
+        <>
+          <button
+            className="location route-toggle"
+            type="button"
+            aria-expanded={routeOpen}
+            aria-controls={`route-${workout.id}`}
+            onClick={() => setRouteOpen((open) => !open)}
+          >
+            <Route size={16} />
+            <span>{t("View running route")}</span>
+            <ChevronRight size={14} className={`route-chevron ${routeOpen ? "open" : ""}`} />
+          </button>
+          {routeOpen && (
+            <div className="card-map route-map" id={`route-${workout.id}`}>
+              <iframe
+                title={`${t("Running route for")} ${workout.title}`}
+                src={workout.route_url.replace(/([?&])context=share(?=&|$)/, "$1context=embed")}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+              <a href={workout.route_url} target="_blank" rel="noopener noreferrer" className="map-external">
+                {t("Open in On The Go Map")} <ArrowUpRight size={13} />
+              </a>
+            </div>
+          )}
+        </>
       )}
       <p className="card-notes">
         {workout.notes || t("Meet the crew, lace up, and enjoy the run.")}
@@ -887,6 +916,13 @@ function ClubApp({ setLanguage }) {
           <p className="detail-notes">
             {selectedWorkout.notes || t("No additional notes for this run.")}
           </p>
+          {selectedWorkout.route_url && (
+            <a className="map-link route-detail-link" href={selectedWorkout.route_url} target="_blank" rel="noopener noreferrer">
+              <Route size={20} />
+              <span>{t("Running route")}<small>{t("Open in On The Go Map")}</small></span>
+              <ArrowUpRight size={18} />
+            </a>
+          )}
           <CommentsSection workout={selectedWorkout} user={user} onSignIn={() => setAuth("login")} expanded />
           <h3>{t("Meet us here")}</h3>
           <a
