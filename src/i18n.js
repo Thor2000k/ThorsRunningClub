@@ -6,6 +6,7 @@ export const translations = {
   "Glossary": "Løbeordbog",
   "Map for": "Kort over",
   "View running route": "Se løberuten",
+  "Route": "Rute",
   "Running route for": "Løberute for",
   "Running route": "Løberute",
   "Open in On The Go Map": "Åbn i On The Go Map",

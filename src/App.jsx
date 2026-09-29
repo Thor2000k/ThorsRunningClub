@@ -290,12 +290,10 @@ function CommentsSection({ workout, user, onSignIn, expanded = false }) {
 function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
   const { t, language } = useTranslation();
   const format = (date, options) => formatDate(date, options, language);
-  const [mapOpen, setMapOpen] = useState(false);
   const [routeOpen, setRouteOpen] = useState(false);
   const past = new Date(workout.starts_at) <= new Date();
   const kindClass = workout.kind.toLowerCase().replaceAll(" ", "-");
   const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(workout.location)}`;
-  const embedUrl = `https://www.google.com/maps?q=${encodeURIComponent(workout.location)}&output=embed`;
   return (
     <article className={`workout-card ${kindClass} ${past ? "past" : ""}`}>
       <div className="card-top">
@@ -331,30 +329,16 @@ function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
           <span>{t("Target pace")}</span>
         </div>
       </div>
-      <button
+      <a
         className="location"
-        type="button"
-        aria-expanded={mapOpen}
-        aria-controls={`map-${workout.id}`}
-        onClick={() => setMapOpen((open) => !open)}
+        href={mapUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`${workout.location} — ${t("Open in Google Maps")}`}
       >
         <MapPin size={16} />
         <span>{workout.location}</span>
-        {mapOpen ? <ChevronLeft size={14} className="map-chevron open" /> : <MapPin size={13} />}
-      </button>
-      {mapOpen && (
-        <div className="card-map" id={`map-${workout.id}`}>
-          <iframe
-            title={`${t("Map for")} ${workout.location}`}
-            src={embedUrl}
-            loading="lazy"
-            referrerPolicy="no-referrer-when-downgrade"
-          />
-          <a href={mapUrl} target="_blank" rel="noreferrer" className="map-external">
-            {t("Open in Google Maps")} <ArrowUpRight size={13} />
-          </a>
-        </div>
-      )}
+      </a>
       {workout.route_url && (
         <>
           <button
@@ -365,7 +349,7 @@ function WorkoutCard({ workout, onDetails, onJoin, busy, user, onSignIn }) {
             onClick={() => setRouteOpen((open) => !open)}
           >
             <Route size={16} />
-            <span>{t("View running route")}</span>
+            <span>{t("Route")}</span>
             <ChevronRight size={14} className={`route-chevron ${routeOpen ? "open" : ""}`} />
           </button>
           {routeOpen && (

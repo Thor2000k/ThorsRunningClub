@@ -94,8 +94,6 @@ h1, h2 { font-size: 29px; font-weight: 600; line-height: 1.25; letter-spacing: -
 .location span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .location > svg:last-child { margin-left: auto; }
 .location:hover { color: var(--accent); }
-.map-chevron { margin-left: auto; transform: rotate(-90deg); }
-.map-chevron.open { transform: rotate(90deg); }
 .card-map { overflow: hidden; margin-top: 12px; border: 1px solid #39483e; border-radius: 6px; background: #111517; }
 .card-map iframe { display: block; width: 100%; height: 145px; border: 0; filter: saturate(.8) contrast(.95); }
 .map-external { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; color: #b8d8c1; font-size: 10px; border-top: 1px solid #303b34; }
