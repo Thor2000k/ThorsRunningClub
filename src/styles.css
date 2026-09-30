@@ -293,3 +293,7 @@ footer > p, footer > span { font-size: 10px; color: #9ca69f; }
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+.workout-card .participants, .modal-content .participants { margin: 10px 0; color: #c4d7c8; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.participants strong { color: var(--accent); }
+.profile-section { max-width: 1180px; }

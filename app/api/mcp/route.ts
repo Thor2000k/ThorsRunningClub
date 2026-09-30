@@ -21,7 +21,7 @@ export async function POST(request: Request) {
     else if (message.method === "ping") result = {};
     else if (message.method === "tools/list") result = { tools: [
       { name: "list_workouts", description: "List the running club schedule with attendance counts.", inputSchema: { type: "object", properties: { from_date: { type: "string" }, to_date: { type: "string" } }, additionalProperties: false } },
-      { name: "upsert_workouts", description: "Publish or update 1–100 running workouts atomically. Reuse external_id on edits.", inputSchema: { type: "object", required: ["workouts"], properties: { workouts: { type: "array", minItems: 1, maxItems: 100 } }, additionalProperties: false } },
+      { name: "upsert_workouts", description: "Publish or update 1–100 running workouts atomically. Reuse external_id on edits.", inputSchema: { type: "object", required: ["workouts"], properties: { workouts: { type: "array", minItems: 1, maxItems: 100, items: { type: "object", required: ["external_id", "title", "kind", "starts_at", "distance_km", "duration_minutes", "pace", "location"], properties: { external_id: { type: "string" }, title: { type: "string" }, kind: { type: "string", enum: ["Easy run", "Intervals", "Tempo", "Long run", "Recovery"] }, starts_at: { type: "string" }, distance_km: { type: "number" }, duration_minutes: { type: "integer" }, pace: { type: "string" }, location: { type: "string" }, notes: { type: "string" }, translations: { type: "object" }, route_url: { type: ["string", "null"], description: "On The Go Map share URL or generated iframe code. Omit to preserve an existing route; null clears it." } } } } }, additionalProperties: false } },
     ] };
     else if (message.method === "tools/call") {
       const name = message.params?.name;

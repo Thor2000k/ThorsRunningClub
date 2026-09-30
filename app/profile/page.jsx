@@ -2,17 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, CalendarDays, Check, Footprints, MessageCircle, Route, Trophy } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, CalendarDays, Check, Footprints, MessageCircle, Route } from "lucide-react";
 import Providers from "../providers";
 import { api } from "../../src/backend.js";
-import { LanguageContext, initialLanguage, useTranslation } from "../../src/i18n.js";
+import { LanguageContext, initialLanguage, localizedWorkout, useTranslation } from "../../src/i18n.js";
+
+import { WorkoutCard, WorkoutDetails } from "../../src/WorkoutCard.jsx";
 
 function ProfileContent() {
+  const queryClient = useQueryClient();
+  const [details, setDetails] = useState(null);
+  const leave = useMutation({ mutationFn: (workout) => api(`/workouts/${workout.id}/attendance`, "DELETE"), onSuccess: () => { queryClient.invalidateQueries({queryKey:["profile"]}); queryClient.invalidateQueries({queryKey:["workouts"]}); setDetails(null); } });
   const { t, language } = useTranslation();
   const profileQuery = useQuery({ queryKey: ["profile"], queryFn: () => api("/profile"), staleTime: 30_000 });
   const profile = profileQuery.data;
-  const formatDate = (value) => new Intl.DateTimeFormat(language === "da" ? "da-DK" : "en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Copenhagen" }).format(new Date(value));
+  const cardProps = { user: profile?.user, onDetails: setDetails, onJoin: (workout) => leave.mutate(workout), busyId: leave.isPending ? leave.variables?.id : null };
   return <main className="profile-page">
     <header className="profile-header">
       <Link className="brand" href="/"><span className="brand-icon"><Footprints size={25} strokeWidth={2} /></span><span>THOR’S<span className="brand-sub">RUNNING CLUB</span></span></Link>
@@ -31,9 +36,11 @@ function ProfileContent() {
           <div><Route size={18} /><strong>{new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(profile.stats.distance)} km</strong><span>{t("Completed distance")}</span></div>
           <div><MessageCircle size={18} /><strong>{profile.stats.comments}</strong><span>{t("Comments")}</span></div>
         </div>
-        <WorkoutHistory title={t("Completed workouts")} empty={t("No completed workouts yet. Join a run to start your history.")} workouts={profile.completed} formatDate={formatDate} completed t={t} />
-        <WorkoutHistory title={t("Upcoming joined workouts")} empty={t("You have no upcoming runs yet.")} workouts={profile.upcoming} formatDate={formatDate} t={t} />
+        <WorkoutHistory title={t("Completed workouts")} empty={t("No completed workouts yet. Join a run to start your history.")} workouts={profile.completed} cardProps={cardProps} language={language} completed t={t} />
+        <WorkoutHistory title={t("Upcoming joined workouts")} empty={t("You have no upcoming runs yet.")} workouts={profile.upcoming} cardProps={cardProps} language={language} t={t} />
       </>}
+      {details && <WorkoutDetails workout={localizedWorkout(details, language)} user={profile.user} onClose={() => setDetails(null)} onJoin={(workout) => leave.mutate(workout)} busy={leave.isPending} error={leave.error?.message} />}
+      {leave.error && <p className="form-error" role="alert">{t(leave.error.message)}</p>}
     </section>
   </main>;
 }
@@ -43,8 +50,8 @@ function LanguageButtons() {
   return <>{["da", "en"].map((code) => <button key={code} aria-pressed={language === code} lang={code}>{code.toUpperCase()}</button>)}</>;
 }
 
-function WorkoutHistory({ title, empty, workouts, formatDate, completed, t }) {
-  return <section className="history-section"><div className="section-heading"><div><p className="eyebrow">{completed ? t("Your history") : t("On the calendar")}</p><h2>{title}</h2></div><span className="result-count">{workouts.length}</span></div>{workouts.length ? <div className="history-list">{workouts.map((workout) => <article className="history-item" key={workout.id}><div><span className={`kind-tag ${workout.kind.toLowerCase().replaceAll(" ", "-")}`}><span />{t(workout.kind)}</span><h3>{workout.title}</h3><p>{formatDate(workout.starts_at)} · {workout.distance_km} km · {workout.location}</p>{completed && <p className="participants"><strong>{t("Participants")}:</strong> {(workout.participants || []).join(", ") || t("No participants")}</p>}</div>{completed && <Trophy size={18} />}</article>)}</div> : <p className="history-empty">{empty}</p>}</section>;
+function WorkoutHistory({ title, empty, workouts, cardProps, language, completed, t }) {
+  return <section className="history-section"><div className="section-heading"><div><p className="eyebrow">{completed ? t("Your history") : t("On the calendar")}</p><h2>{title}</h2></div><span className="result-count">{workouts.length}</span></div>{workouts.length ? <div className="workout-grid">{workouts.map((workout) => <WorkoutCard key={workout.id} workout={localizedWorkout(workout, language)} {...cardProps} busy={cardProps.busyId === workout.id} />)}</div> : <p className="history-empty">{empty}</p>}</section>;
 }
 
 export default function ProfilePage() {

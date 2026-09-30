@@ -48,14 +48,6 @@ test@example.com
 RunClub-test-2026!
 ```
 
-To seed the same demo workouts and test user into a hosted Neon database, first apply migrations, temporarily set `ALLOW_TEST_LOGIN=true` in the target Vercel environment, then run:
-
-```bash
-vercel env run -e production -- npm run db:seed
-```
-
-The seed command is idempotent for the demo workouts and test email. Disable `ALLOW_TEST_LOGIN` again after testing if the deployment should use Google sign-in only.
-
 ## Database
 
 Drizzle schema is in [lib/db/schema.ts](lib/db/schema.ts). Generate and apply migrations with:
@@ -66,6 +58,44 @@ npm run db:migrate
 ```
 
 The database stores Auth.js identities, workouts, bilingual workout text, aliases, and attendance. Workout attendee counts are aggregated server-side and member identities are never returned by the public workout endpoint.
+
+## Seed the Vercel database
+
+Run these commands from the project directory in your local terminal. During `vercel link`, select the existing Vercel project for this app:
+
+```bash
+npm install -g vercel
+vercel login
+vercel link
+npm install
+vercel env ls production
+```
+
+Ensure your hosted database connection is configured in the project's **Production** environment as `DATABASE_URL`, `POSTGRES_URL_NON_POOLING`, or `POSTGRES_URL`. Then apply the existing migrations and seed that database:
+
+```bash
+vercel env run -e production -- npm run db:migrate
+vercel env run -e production -- npm run db:seed
+```
+
+These commands write to the database configured for Production. To seed a Preview database instead, ensure its connection variable is configured in **Preview** and use:
+
+```bash
+vercel env run -e preview -- npm run db:migrate
+vercel env run -e preview -- npm run db:seed
+```
+
+The seed creates five demo workouts in the current week and this test account:
+
+```text
+Email: test@example.com
+Password: RunClub-test-2026!
+Alias: Test Runner
+```
+
+If `TEST_LOGIN_PASSWORD` is set in the selected environment, the seed uses that password instead. Running the seed again updates the demo workouts and resets this test user's alias and password without deleting other workouts or attendance.
+
+To use the test account on the deployed site, set `ALLOW_TEST_LOGIN=true` in the matching Vercel environment and redeploy. This flag enables test sign-in; it is not required to run the seed. Disable it and redeploy after testing if the site should use Google sign-in only.
 
 ## MCP publishing
 
@@ -108,3 +138,5 @@ npm run test:e2e
 ```
 
 The Python server and Supabase browser client are retained only as historical migration material; the running application now uses Next.js Route Handlers and Drizzle.
+
+Workout routes: draw a route on On The Go Map, copy its share link or iframe code, and supply it as `route_url` in a workout import or MCP upsert. Cards on the calendar and profile show an expandable route and a Google Maps location link. Omit `route_url` to preserve an existing route; use `null` to clear it. Completed runs retain their sign-ups and cannot be joined or left after they start.

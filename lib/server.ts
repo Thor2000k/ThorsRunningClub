@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, gte, lte, sql } from "drizzle-orm";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { attendance, comments, users, workouts } from "@/lib/db/schema";
@@ -102,14 +102,14 @@ export async function profileSummary(userId: string) {
   const joined = await db.select({
     id: workouts.id, external_id: workouts.externalId, title: workouts.title, kind: workouts.kind,
     starts_at: workouts.startsAt, distance_km: workouts.distanceKm, duration_minutes: workouts.durationMinutes,
-    pace: workouts.pace, location: workouts.location, notes: workouts.notes, translations: workouts.translations,
+    pace: workouts.pace, location: workouts.location, notes: workouts.notes, translations: workouts.translations, route_url: workouts.routeUrl,
   }).from(attendance).innerJoin(workouts, eq(attendance.workoutId, workouts.id)).where(eq(attendance.userId, userId)).orderBy(desc(workouts.startsAt));
-  const participantRows = await db.select({ workoutId: attendance.workoutId, alias: users.alias }).from(attendance).innerJoin(users, eq(attendance.userId, users.id));
+  const participantRows = joined.length ? await db.select({ workoutId: attendance.workoutId, alias: users.alias }).from(attendance).innerJoin(users, eq(attendance.userId, users.id)).where(inArray(attendance.workoutId, joined.map((workout) => workout.id))) : [];
   const participantMap = new Map<number, string[]>();
   for (const row of participantRows) participantMap.set(row.workoutId, [...(participantMap.get(row.workoutId) || []), row.alias || "Runner"]);
   const authored = await db.select({ count: sql<number>`count(*)::int` }).from(comments).where(eq(comments.userId, userId));
   const completed = joined.filter((workout) => workout.starts_at <= new Date());
   const upcoming = joined.filter((workout) => workout.starts_at > new Date()).reverse();
-  const serialize = (workout: typeof joined[number]) => ({ ...workout, starts_at: workout.starts_at.toISOString(), distance_km: Number(workout.distance_km), participants: participantMap.get(workout.id) || [] });
+  const serialize = (workout: typeof joined[number]) => ({ ...workout, starts_at: workout.starts_at.toISOString(), distance_km: Number(workout.distance_km), joined: true, attendees: (participantMap.get(workout.id) || []).length, participants: participantMap.get(workout.id) || [] });
   return { user, stats: { completed: completed.length, upcoming: upcoming.length, distance: completed.reduce((total, workout) => total + Number(workout.distance_km), 0), comments: Number(authored[0]?.count || 0) }, completed: completed.map(serialize), upcoming: upcoming.map(serialize) };
 }
