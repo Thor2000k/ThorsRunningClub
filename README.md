@@ -57,6 +57,20 @@ npm run db:generate
 npm run db:migrate
 ```
 
+To apply migrations to the Vercel Production database, run this from the project directory after `vercel login` and `vercel link`:
+
+```bash
+vercel env run -e production -- npm run db:migrate
+```
+
+For the Vercel Preview database, use:
+
+```bash
+vercel env run -e preview -- npm run db:migrate
+```
+
+Each command uses the database connection configured in that Vercel environment and applies pending migrations without seeding demo data.
+
 The database stores Auth.js identities, workouts, bilingual workout text, aliases, and attendance. Workout attendee counts are aggregated server-side and member identities are never returned by the public workout endpoint.
 
 ## Seed the Vercel database
